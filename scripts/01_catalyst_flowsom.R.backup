@@ -1,0 +1,54 @@
+suppressPackageStartupMessages({
+  library(CATALYST); library(diffcyt); library(flowCore)
+  library(SingleCellExperiment); library(scater); library(ggplot2)
+})
+set.seed(1234)
+fig <- function(p, name, w = 8, h = 6) {
+  path <- file.path("results/figures", name)
+  if (inherits(p, "Heatmap")) {
+    png(path, width = w, height = h, units = "in", res = 300)
+    ComplexHeatmap::draw(p)
+    invisible(dev.off())
+  } else {
+    ggsave(path, p, width = w, height = h, dpi = 300)
+  }
+}
+
+## 1. 载入数据 -> SingleCellExperiment
+data(PBMC_fs, PBMC_panel, PBMC_md)
+sce <- prepData(PBMC_fs, PBMC_panel, PBMC_md)   # 默认做 arcsinh(cofactor=5)
+
+## 2. QC：每个样本的细胞数、样本级 MDS
+fig(plotCounts(sce, group_by = "sample_id", color_by = "condition"), "01_counts.png")
+fig(pbMDS(sce, color_by = "condition"), "02_pbMDS.png")
+
+## 3. FlowSOM 聚类 + ConsensusClusterPlus 元聚类
+sce <- cluster(sce, features = "type", xdim = 10, ydim = 10,
+               maxK = 20, seed = 1234)
+fig(delta_area(sce), "03_delta_area.png")
+
+## 4. 聚类热图 + UMAP
+fig(plotExprHeatmap(sce, features = "type", by = "cluster_id",
+                    k = "meta20", bin_anno = TRUE), "04_cluster_heatmap.png", 10, 7)
+sce <- runDR(sce, "UMAP", cells = 500, features = "type")
+fig(plotDR(sce, "UMAP", color_by = "meta20"), "05_umap_meta20.png")
+fig(plotDR(sce, "UMAP", color_by = "condition"), "06_umap_condition.png")
+
+## 5. 丰度 + 差异分析（配对设计：condition + patient_id）
+ei <- metadata(sce)$experiment_info
+design   <- createDesignMatrix(ei, cols_design = c("condition", "patient_id"))
+contrast <- createContrast(c(0, 1, 0, 0, 0))    # BCRXL vs Ref
+
+da <- diffcyt(sce, design = design, contrast = contrast,
+              analysis_type = "DA", method_DA = "diffcyt-DA-edgeR",
+              clustering_to_use = "meta20", verbose = FALSE)
+ds <- diffcyt(sce, design = design, contrast = contrast,
+              analysis_type = "DS", method_DS = "diffcyt-DS-limma",
+              clustering_to_use = "meta20", verbose = FALSE)
+
+write.csv(as.data.frame(rowData(da$res)), "results/tables/DA_results.csv", row.names = FALSE)
+write.csv(as.data.frame(rowData(ds$res)), "results/tables/DS_results.csv", row.names = FALSE)
+fig(plotDiffHeatmap(sce, rowData(da$res), all = TRUE, fdr = 0.05), "07_DA_heatmap.png")
+fig(plotDiffHeatmap(sce, rowData(ds$res), all = TRUE, fdr = 0.05), "08_DS_heatmap.png", 10, 8)
+
+sessionInfo()

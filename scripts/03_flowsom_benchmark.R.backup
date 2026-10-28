@@ -1,0 +1,31 @@
+suppressPackageStartupMessages({
+  library(HDCytoData); library(SummarizedExperiment)
+  library(flowCore); library(FlowSOM); library(mclust)
+})
+set.seed(1234)
+dir.create("results/benchmark", recursive = TRUE, showWarnings = FALSE)
+
+datasets <- list(Samusik_01 = Samusik_01_SE, Levine_32dim = Levine_32dim_SE)
+
+res <- lapply(names(datasets), function(nm) {
+  d <- datasets[[nm]]()
+  is_type <- colData(d)$marker_class == "type"
+  x   <- asinh(assay(d, "exprs")[, is_type] / 5)       # arcsinh, cofactor 5
+  ref <- rowData(d)$population_id
+  keep <- !is.na(ref)                                  # 只评估有参考标签的细胞
+  x <- as.matrix(x[keep, ]); ref <- as.character(ref[keep])
+  k <- length(unique(ref))
+
+  ff   <- flowFrame(x)
+  fsom <- FlowSOM(ff, colsToUse = seq_len(ncol(x)), nClus = k, seed = 1234)
+  pred <- as.character(GetMetaclusters(fsom))
+
+  tab <- table(ref, pred)
+  f1  <- sapply(rownames(tab), function(p)
+           max(2 * tab[p, ] / (rowSums(tab)[p] + colSums(tab))))   # 每个参考群体的最佳匹配 F1
+  data.frame(dataset = nm, n_cells = nrow(x), n_markers = ncol(x),
+             n_ref_populations = k,
+             ARI = adjustedRandIndex(ref, pred), mean_F1 = mean(f1))
+})
+res <- do.call(rbind, res); print(res)
+write.csv(res, "results/benchmark/flowsom_vs_manual.csv", row.names = FALSE)
