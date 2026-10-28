@@ -1,0 +1,7 @@
+"dataset","n_cells_total","n_cells_labeled","pct_unassigned","n_ref_populations","setting","ARI","mean_F1_hungarian"
+"Samusik_01",86864,53173,38.8,24,"metaclusters = n_ref",0.595720623346561,0.623539155676532
+"Samusik_01",86864,53173,38.8,24,"metaclusters = 40",NA,0.690763411379567
+"Samusik_01",86864,53173,38.8,24,"100 SOM nodes",NA,0.573364014625048
+"Levine_32dim",265627,104184,60.8,14,"metaclusters = n_ref",0.701602401151257,0.419964287510146
+"Levine_32dim",265627,104184,60.8,14,"metaclusters = 40",NA,0.722026094897738
+"Levine_32dim",265627,104184,60.8,14,"100 SOM nodes",NA,0.504404966281528
